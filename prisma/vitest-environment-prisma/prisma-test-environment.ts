@@ -1,16 +1,41 @@
+import "dotenv/config";
+
+import { randomUUID } from "node:crypto";
+import { execSync } from "node:child_process";
 import { Environment } from "vitest";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+function generateDatabaseURL(schema: string) {
+  if (!process.env.DATABASE_URL) {
+    throw new Error("Please provide a DATABASE_URL environment variable.");
+  }
+
+  const url = new URL(process.env.DATABASE_URL);
+
+  url.searchParams.set("schema", schema);
+
+  return url.toString();
+}
 
 export default <Environment>{
-  name: "prisma", //é o nome dele, não importa muito
+  name: "prisma",
   async setup() {
-    //essa é a unica função que o environment precisa ter, que é qual função eu quero executar antes dos meus testes.
-    //Ou seja, ele vai executar antes de qualquer arquivo de teste
-    console.log("Setup");
+    const schema = randomUUID();
+    const databaseURL = generateDatabaseURL(schema);
+
+    process.env.DATABASE_URL = databaseURL;
+
+    execSync("npx prisma migrate deploy");
 
     return {
       async teardown() {
-        //tem que retornar esse método, ele eu quero executar após os testes
-        console.log("Teardown");
+        await prisma.$executeRawUnsafe(
+          `DROP SCHEMA IF EXISTS "${schema}" CASCADE`
+        );
+
+        await prisma.$disconnect();
       },
     };
   },
